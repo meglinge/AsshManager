@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Processes do not survive a pause, so start the declared services (and their portals) again
+# whenever the orb wakes. Services that are already running are left alone.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+amp orb services ensure

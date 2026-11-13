@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PUBLIC_URL: ${PUBLIC_URL:?Set an HTTPS public URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set a 64-character hex encryption key}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      SSH_ALLOWED_CIDRS: ${SSH_ALLOWED_CIDRS:-}
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP host}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:?Set sender address}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    volumes:
+      - assh-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  assh-data:

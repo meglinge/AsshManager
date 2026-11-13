@@ -1,0 +1,8 @@
+services:
+  assh:
+    command: npm start
+    port: 3000
+    health: /healthz
+    portal:
+      title: AsshManager · SSH 与 MCP
+      description: 注册自己的账号体验。初始可用版本，请勿添加重要生产凭据。MCP 外部客户端需正式部署地址。
