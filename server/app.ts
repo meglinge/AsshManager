@@ -504,7 +504,10 @@ export function createApp({
       store
         .all<Device>("SELECT * FROM devices ORDER BY created_at DESC")
         .filter((d) => access(store, d, actor(res).id))
-        .map((d) => publicDevice(store, d, actor(res).id)),
+        .map((d) => ({
+          ...publicDevice(store, d, actor(res).id),
+          connection: ssh.connection(d.id),
+        })),
     ),
   );
   const saveDevice = (req: Request, res: Response, old?: Device) => {
@@ -568,6 +571,7 @@ export function createApp({
         store.get<Device>("SELECT * FROM devices WHERE id=?", id),
       );
     });
+    ssh.invalidate(id);
     res
       .status(old ? 200 : 201)
       .json(
@@ -592,6 +596,7 @@ export function createApp({
       audit(store, actor(res), "device.delete", device.name, "success", device);
       store.run("DELETE FROM devices WHERE id=?", device.id);
     });
+    ssh.invalidate(device.id);
     res.json({ ok: true });
   });
   app.get("/api/devices/:id/grants", (req, res) => {
@@ -774,5 +779,5 @@ export function createApp({
       res.status(500).json({ error: "服务暂时不可用，请稍后重试" });
     },
   );
-  return app;
+  return Object.assign(app, { ssh });
 }

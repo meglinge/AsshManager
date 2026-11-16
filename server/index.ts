@@ -28,6 +28,7 @@ const server = app.listen(port, "0.0.0.0", () =>
 );
 server.requestTimeout = 90000;
 process.on("SIGTERM", () => {
+  app.ssh.close();
   server.close(() => {
     store.db.close();
     process.exit(0);

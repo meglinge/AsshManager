@@ -50,6 +50,11 @@ export interface Device {
   access: "view" | "execute" | "manage";
   checked_at: string | null;
   created_at: string;
+  connection?: {
+    state: "connecting" | "connected";
+    since: string | null;
+    active: number;
+  } | null;
 }
 export interface Audit {
   id: number;

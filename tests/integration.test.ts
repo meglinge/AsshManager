@@ -35,6 +35,7 @@ test(
       allowedCidrs: ["127.0.0.1/32"],
       serveStatic: false,
     });
+    t.after(() => app.ssh.close());
     const server = app.listen(0, "127.0.0.1");
     await once(server, "listening");
     t.after(
@@ -461,6 +462,69 @@ test(
           ).status,
           504,
         );
+      },
+    );
+
+    await t.test(
+      "one persistent SSH connection per server: shared, isolated per operation, reconnected and invalidated",
+      async () => {
+        const clientPort = (stdout: string) => stdout.split(" ")[1];
+        const peer = async () => {
+          const result = await asOwner(runPath, "POST", {
+            operation: "execute",
+            command: "echo $SSH_CONNECTION",
+          });
+          assert.equal(result.status, 200);
+          return clientPort(result.body.stdout);
+        };
+        const connection = async () =>
+          (await asOwner("/api/devices")).body.find(
+            (d: { id: string }) => d.id === device.id,
+          ).connection;
+        const first = await peer();
+        assert.equal(await peer(), first);
+        assert.equal(
+          clientPort(
+            (
+              await tool(executeClient, "ssh_execute", {
+                server_id: device.id,
+                command: "echo $SSH_CONNECTION",
+              })
+            ).value.stdout,
+          ),
+          first,
+        );
+        assert.equal((await connection()).state, "connected");
+        const [timedOut, concurrent] = await Promise.all([
+          asOwner(runPath, "POST", {
+            operation: "execute",
+            command: "sleep 3",
+            timeout: 1,
+          }),
+          asOwner(runPath, "POST", {
+            operation: "execute",
+            command: "sleep 2; echo $SSH_CONNECTION",
+          }),
+        ]);
+        assert.equal(timedOut.status, 504);
+        assert.equal(clientPort(concurrent.body.stdout), first);
+        assert.equal(
+          (
+            await asOwner(runPath, "POST", {
+              operation: "execute",
+              command: "kill $PPID",
+            })
+          ).status,
+          502,
+        );
+        const second = await peer();
+        assert.notEqual(second, first);
+        assert.equal(
+          (await asOwner(`/api/devices/${device.id}`, "PUT", data)).status,
+          200,
+        );
+        assert.equal(await connection(), null);
+        assert.notEqual(await peer(), second);
       },
     );
 

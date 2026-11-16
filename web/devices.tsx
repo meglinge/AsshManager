@@ -724,6 +724,16 @@ export function DeviceDetail({
               <dd>{date(device.checked_at)}</dd>
             </div>
             <div>
+              <dt>SSH 长连接</dt>
+              <dd>
+                {device.connection?.state === "connected"
+                  ? `已保持 · 自 ${date(device.connection.since)}`
+                  : device.connection
+                    ? "正在建立"
+                    : "未建立"}
+              </dd>
+            </div>
+            <div>
               <dt>我的权限</dt>
               <dd>{roleNames[device.access]}</dd>
             </div>
