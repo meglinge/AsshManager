@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { emailVerificationRequired } from "./security.js";
 
 export interface Mail {
   to: string;
@@ -9,14 +10,24 @@ export interface Mail {
   text: string;
 }
 export interface Mailer {
-  mode: "smtp" | "local";
+  mode: "smtp" | "local" | "disabled";
   send(mail: Mail): Promise<void>;
 }
 
 export function createMailer(dataDir: string): Mailer {
   if (!process.env.SMTP_HOST) {
-    if (process.env.NODE_ENV === "production")
-      throw new Error("Production requires SMTP_HOST and SMTP_FROM");
+    if (process.env.NODE_ENV === "production") {
+      if (emailVerificationRequired())
+        throw new Error(
+          "EMAIL_VERIFICATION_REQUIRED=true requires SMTP_HOST and SMTP_FROM in production",
+        );
+      return {
+        mode: "disabled",
+        async send() {
+          throw new Error("Mail service is not configured");
+        },
+      };
+    }
     const directory = join(dataDir, "mail");
     return {
       mode: "local",

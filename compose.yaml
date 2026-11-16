@@ -12,9 +12,9 @@ services:
       EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-false}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       SSH_ALLOWED_CIDRS: ${SSH_ALLOWED_CIDRS:-}
-      SMTP_HOST: ${SMTP_HOST:?Set SMTP host}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_FROM: ${SMTP_FROM:?Set sender address}
+      SMTP_FROM: ${SMTP_FROM:-}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     volumes:

@@ -2,13 +2,20 @@ import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { randomBytes } from "node:crypto";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createApp } from "../server/app.js";
 import { Store } from "../server/store.js";
 import { hash, passwordHash } from "../server/security.js";
-import type { Mail } from "../server/mail.js";
+import { createMailer, type Mail, type Mailer } from "../server/mail.js";
 
 const password = "Mailbox-owner-password-27";
-async function fixture(t: TestContext, requireVerification = true) {
+async function fixture(
+  t: TestContext,
+  requireVerification = true,
+  mailer?: Mailer,
+) {
   const previous = process.env.EMAIL_VERIFICATION_REQUIRED;
   if (requireVerification) process.env.EMAIL_VERIFICATION_REQUIRED = "true";
   else delete process.env.EMAIL_VERIFICATION_REQUIRED;
@@ -25,7 +32,7 @@ async function fixture(t: TestContext, requireVerification = true) {
     key: randomBytes(32),
     publicUrl: origin,
     serveStatic: false,
-    mailer: {
+    mailer: mailer ?? {
       mode: "smtp",
       async send(message) {
         if (failMail) throw new Error("sensitive transport error");
@@ -95,6 +102,93 @@ async function fixture(t: TestContext, requireVerification = true) {
     },
   };
 }
+
+test("production without SMTP supports accounts and MCP without issuing mail links", async (t) => {
+  const keys = [
+    "NODE_ENV",
+    "SMTP_HOST",
+    "SMTP_FROM",
+    "EMAIL_VERIFICATION_REQUIRED",
+  ];
+  const previous = keys.map((key) => process.env[key]);
+  t.after(() =>
+    keys.forEach((key, i) => {
+      if (previous[i] === undefined) delete process.env[key];
+      else process.env[key] = previous[i];
+    }),
+  );
+  process.env.NODE_ENV = "production";
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_FROM;
+  delete process.env.EMAIL_VERIFICATION_REQUIRED;
+  const dir = await mkdtemp(join(tmpdir(), "assh-mail-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const mailer = createMailer(dir);
+  assert.equal(mailer.mode, "disabled");
+  const f = await fixture(t, false, mailer);
+  assert.equal(
+    (await f.request("/api/public-config")).body.mailMode,
+    "disabled",
+  );
+  const data = { name: "No mail", email: "no-mail@example.com", password };
+  const user = await f.request("/api/auth/register", data);
+  assert.equal(user.status, 201);
+  assert.equal(user.body.email_verified, false);
+  assert.equal((await f.request("/api/auth/login", data)).status, 200);
+  assert.equal(
+    (await f.request("/api/devices", undefined, user.cookie)).status,
+    200,
+  );
+  const token = await f.request(
+    "/api/tokens",
+    { name: "no-mail", scope: "read" },
+    user.cookie,
+  );
+  assert.equal(token.status, 201);
+  const tools = await f.request(
+    "/mcp",
+    { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    "",
+    "POST",
+    {
+      Authorization: `Bearer ${token.body.token}`,
+      Accept: "application/json, text/event-stream",
+    },
+  );
+  assert.equal(tools.body.result.tools.length, 6);
+  const team = await f.request("/api/teams", { name: "No mail" }, user.cookie);
+  assert.equal(
+    (
+      await f.request(
+        `/api/teams/${team.body.id}/invitations`,
+        { email: "recipient@example.com" },
+        user.cookie,
+      )
+    ).status,
+    503,
+  );
+  assert.deepEqual(f.store.all("SELECT * FROM invitations"), []);
+  const known = await f.request("/api/auth/forgot-password", {
+    email: data.email,
+  });
+  const unknown = await f.request("/api/auth/forgot-password", {
+    email: "unknown@example.com",
+  });
+  assert.equal(known.status, 200);
+  assert.deepEqual(known, unknown);
+  assert.deepEqual(f.store.all("SELECT * FROM email_tokens"), []);
+  assert.deepEqual(await readdir(dir), []);
+
+  process.env.EMAIL_VERIFICATION_REQUIRED = "true";
+  assert.throws(
+    () => createMailer(dir),
+    /EMAIL_VERIFICATION_REQUIRED=true requires SMTP/,
+  );
+  process.env.SMTP_HOST = "smtp.example.com";
+  assert.throws(() => createMailer(dir), /SMTP_FROM is required/);
+  process.env.SMTP_FROM = "sender@example.com";
+  assert.equal(createMailer(dir).mode, "smtp");
+});
 
 test("verification defaults off; toggling it enforces Web/MCP access without changing identity", async (t) => {
   const f = await fixture(t, false);

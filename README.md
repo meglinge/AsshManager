@@ -48,7 +48,7 @@ node --env-file=.env --import tsx server/index.ts
 
 ### 邮件配置与升级
 
-配置 `SMTP_HOST`、`SMTP_PORT`（默认 587）、`SMTP_FROM`，如需认证则设置 `SMTP_USER` 与 `SMTP_PASSWORD`。465 使用 TLS，其他端口强制 STARTTLS，并校验证书；不提供关闭 TLS 校验的开关。生产缺少主机或发件人配置时拒绝启动。发信域名还需在邮件供应商处完成 SPF/DKIM 等验证。
+SMTP 为可选配置。生产环境未配置 `SMTP_HOST` 且邮箱验证关闭时可正常启动，注册、登录和 SSH/MCP 不依赖邮件；邮件发送禁用，也不会保存本地邮件文件。生产环境显式开启 `EMAIL_VERIFICATION_REQUIRED=true` 时必须配置 SMTP，否则启动报错，不会自动关闭验证。配置 `SMTP_HOST` 后必须提供 `SMTP_FROM`；`SMTP_PORT` 默认 587，如需认证则设置 `SMTP_USER` 与 `SMTP_PASSWORD`。465 使用 TLS，其他端口强制 STARTTLS，并校验证书；不提供关闭 TLS 校验的开关。发信域名还需在邮件供应商处完成 SPF/DKIM 等验证。
 
 未配置 SMTP 的非生产环境会将邮件保存至 `DATA_DIR/mail/*.json`（目录 0700、文件 0600），**不会向真实邮箱发信**；邮件相关界面会明确提示。关闭邮箱验证时，注册、登录和 SSH/MCP 使用不依赖发信，但邮件邀请和找回密码仍需 SMTP 才能真实投递。此目录含验证/重置链接，只供部署管理员本地联调，不提供网页收件箱，不得通过静态服务暴露，测试后删除。设置了 SMTP 但投递失败不会退回本地模式。验证开启时的注册、申请验证和找回密码接口使用统一邮件回复，投递失败仅记录不含凭据的错误；邀请失败向管理员返回可重试错误。验证关闭时，重复邮箱注册会被拒绝，不覆盖原账号。当前没有持久化投递队列/自动重试，管理员应监控邮件服务失败并让用户重新申请。
 
@@ -129,7 +129,7 @@ node --env-file=.env --import tsx server/index.ts
 ### Docker
 
 ```bash
-# 先在环境或 .env 中提供 HTTPS PUBLIC_URL、ENCRYPTION_KEY 与 SMTP 配置
+# 先在环境或 .env 中提供 HTTPS PUBLIC_URL 与 ENCRYPTION_KEY；SMTP 按需配置
 docker compose up --build -d
 ```
 

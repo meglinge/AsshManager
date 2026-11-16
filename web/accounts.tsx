@@ -17,7 +17,7 @@ export interface EmailAction {
 
 export function MailNotice() {
   const { data } = useResource<PublicConfig>("/public-config");
-  return data?.mailMode === "local" ? (
+  return data?.mailMode === "local" || data?.mailMode === "disabled" ? (
     <div className="warning-box">未配置邮件服务，邮件不会发出。</div>
   ) : null;
 }
